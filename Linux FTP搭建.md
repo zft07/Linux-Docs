@@ -92,6 +92,8 @@ tcp        0      0 0.0.0.0:21        0.0.0.0:*       LISTEN
 如果看到以上信息，证明ftp服务已经开启。
 
 
+定位vsftp问题时，可以使用sudo /usr/sbin/vsftpd命令启动vsftpd查看报错信息，直接使用systemctl start vsftpd无法查看报错原因！
+
 
 ## vsftpd的相关文件
 
@@ -227,7 +229,7 @@ FTP的欢迎信息。
 
 在FTP登陆成功之后，服务器会往客户端发送一个欢迎消息以表示登陆成功。这是一个个性化的功能，您可以自由的设置其值，也可以在配置最前加上#注释本行。
 
- 
+
 + data_connection_timeout
 
 ```bash
@@ -268,6 +270,19 @@ userlist_deny=NO                        #允许列表中的用户访问ftp服务
 
 
 
+如何设置ftp目录呢？
+
+**为不同用户设置不同的ftp的根目录**(配置文件中设置)：
+
+```bash
+# 用户登录路径，
+#local_root针对系统用户
+local_root=/var/ftp/
+# 锁定用户到各自目录为其根目录
+chroot_local_user=YES
+# anon_root 针对匿名用户
+anon_root=/var/www/html
+```
 
 修改配置文件完成。保存后重启VSFTPD。
 
@@ -287,10 +302,10 @@ userlist_deny=NO                        #允许列表中的用户访问ftp服务
 
 
 现在，你已经启动了一个正常运行的FTP服务器。凭借Linux用户名和密码登录，就可以使用FTP功能了。与SSH登录远程服务器一样，登录FTP 之后你会来到你的home目录。但是，这可能不是你所期望的，因为你必须告诉每个使用者你的Linux密码，而且你的所有文件都会暴露在光天化日之下！
- 
+
 如果一个团队需要在局域网使用公共的FTP服务，更好的解决办法是为FTP服务新建单独的Linux用户。
- 
- 
+
+
 建立新的用户用以访问ftp服务器
 ```bash
 useradd -m -c "Ciel Yang, owner of the server" -s /bin/bash ciel
@@ -504,3 +519,18 @@ cat /etc/shells
 ```
 而创建ftp用户时，为了禁止ssh登录，一般多为/bin/false 、/usr/sbin/nologin 等，显然不是一个有效的bash，也就无法登录了。
 
+
+## 500 OOPS问题
+
+当我们限定了用户不能跳出其主目录之后，使用该用户登录FTP时往往会遇到这个错误：
+```bash
+500 OOPS: vsftpd: refusing to run with writable root inside chroot ()
+```
+- Add stronger checks for the configuration error of running with a writeable root directory inside a chroot(). This may bite people who carelessl     y turned on chroot_local_user but such is life.
+
+从2.3.5之后，vsftpd增强了安全检查，如果用户被限定在了其主目录下，则该用户的主目录不能再具有写权限了！如果检查发现还有写权限，就会报该错误。
+
+要修复这个错误，可以用命令chmod a-w /home/user去除用户主目录的写权限，注意把目录替换成你自己的。或者你可以在vsftpd的配置文件中增加下列两项中的一>项：
+allow_writeable_chroot=YES
+
+vsftp重启后一直无法重启，多次重装（apt remove）也无法重启导致郁闷半天，最后完全清除(apt --purge remove)安装才ok。
